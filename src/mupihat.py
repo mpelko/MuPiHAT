@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-""" Script for MuPiHAT Charger IC (BQ25792)
+"""Script for MuPiHAT Charger IC (BQ25792)
 Parameters
 ----------
 -l <logfile> : str
@@ -67,10 +67,19 @@ def setup_logging(logfile):
 def log_register_values():
     """Logs register values for debugging."""
     logging.info("*** Timestamp: %s", timestamp())
-    logging.info("Thermal Regulation Threshold: %s", hat.REG16_Temperature_Control.get_thermal_reg_threshold())
-    logging.info("Thermal Shutdown Threshold: %s", hat.REG16_Temperature_Control.get_thermal_shutdown_threshold())
+    logging.info(
+        "Thermal Regulation Threshold: %s",
+        hat.REG16_Temperature_Control.get_thermal_reg_threshold(),
+    )
+    logging.info(
+        "Thermal Shutdown Threshold: %s",
+        hat.REG16_Temperature_Control.get_thermal_shutdown_threshold(),
+    )
     logging.info("Temperature Charger IC: %s", hat.REG41_TDIE_ADC.get_IC_temperature())
-    logging.info("Temperature Regulation Status: %s", hat.REG1D_Charger_Status_2.get_thermal_regulation_status())
+    logging.info(
+        "Temperature Regulation Status: %s",
+        hat.REG1D_Charger_Status_2.get_thermal_regulation_status(),
+    )
     logging.info("Charger Status: %s", hat.REG1C_Charger_Status_1.CHG_STAT_STRG)
     logging.info("IBUS [mA]: %s", hat.get_ibus())
     logging.info("IBAT [mA]: %s", hat.get_ibat())
@@ -93,7 +102,7 @@ def index():
 @app.route("/api/registers")
 def api_registers():
     """Flask API endpoint to return register values as JSON."""
-    try:     
+    try:
         return jsonify(hat.to_json_registers())
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -120,26 +129,27 @@ def periodic_json_dump():
 
 def parse_arguments():
     """Parses command-line arguments using argparse."""
-    parser = argparse.ArgumentParser(
-        description="MuPiHAT Charger IC (BQ25792) Service"
-    )
+    parser = argparse.ArgumentParser(description="MuPiHAT Charger IC (BQ25792) Service")
     parser.add_argument(
-        "-l", "--logfile",
+        "-l",
+        "--logfile",
         type=str,
         help="Enable logging and specify the log file path",
-        default="/tmp/mupihat.log"
+        default="/tmp/mupihat.log",
     )
     parser.add_argument(
-        "-j", "--json",
+        "-j",
+        "--json",
         type=str,
         help="Enable JSON file generation and specify the JSON file path",
-        default="/tmp/mupihat.json"
+        default="/tmp/mupihat.json",
     )
     parser.add_argument(
-        "-c", "--config",
+        "-c",
+        "--config",
         type=str,
         help="Config (Json) File for MuPiHAT",
-        default="/etc/mupihat/mupihatconfig.json"
+        default="/etc/mupihat/mupihatconfig.json",
     )
     return parser.parse_args()
 
@@ -159,9 +169,11 @@ def main():
     if os.path.exists("/dev/i2c-1"):
         i2c_device = 1
     else:
-        logging.error("No supported I2C device found (/dev/i2c-1). Check if the I2C bus is enabled.")
+        logging.error(
+            "No supported I2C device found (/dev/i2c-1). Check if the I2C bus is enabled."
+        )
         sys.exit(1)
-        
+
     # Set up logging if enabled
     if log_flag:
         setup_logging(logfile)
