@@ -1,0 +1,13 @@
+# Development dependencies for MuPiHAT project
+# Install with: uv pip install -r requirements-dev.txt
+
+# Include runtime dependencies
+-r requirements.txt
+
+# Code formatting and linting
+ruff>=0.1.0
+
+# Optional: Add other dev tools as needed
+# pytest
+# mypy
+# pre-commit
