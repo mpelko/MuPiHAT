@@ -124,9 +124,9 @@ fi
 cd "$APP_DIR"
 
 # Install Python dependencies
-if [ -f "./src/requirements.txt" ]; then
+if [ -f "./requirements.txt" ]; then
     info "📦 Installing Python dependencies..."
-    sudo -u "$SUDO_USER" pip3 install --break-system-packages -r ./src/requirements.txt
+    sudo -u "$SUDO_USER" pip3 install --break-system-packages -r ./requirements.txt
 else
     info "ℹ️ No requirements.txt found, skipping Python package installation."
 fi

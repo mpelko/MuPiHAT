@@ -7,10 +7,8 @@ name = "mupihat"
 version = "0.1.1"
 description = "MuPiHAT Charger IC (BQ25792) Python Library"
 readme = "README.md"
-license = {text = "GPL-3.0-or-later"}
-authors = [
-    {name = "Lars Stopfkuchen", email = "larsstopfkuchen@mupihat.de"}
-]
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "Lars Stopfkuchen", email = "larsstopfkuchen@mupihat.de" }]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -23,15 +21,13 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 requires-python = ">=3.8"
-dependencies = [
-    "smbus2",
-    "flask",
-]
+dependencies = ["smbus2", "flask"]
 
 [project.optional-dependencies]
-dev = [
-    "ruff>=0.1.0",
-]
+dev = ["ruff>=0.1.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
