@@ -34,6 +34,8 @@ import json
 import logging
 import sys
 import time
+from dataclasses import dataclass
+from enum import Enum
 
 import smbus2
 
@@ -47,6 +49,60 @@ logging.basicConfig(
 )
 
 
+class ChargerStatus(Enum):
+    """Enumeration of possible charger status values."""
+
+    NOT_CHARGING = "Not Charging"
+    TRICKLE_CHARGE = "Trickle Charge"
+    PRE_CHARGE = "Pre-charge"
+    FAST_CHARGE_CC = "Fast charge (CC mode)"
+    TAPER_CHARGE_CV = "Taper Charge (CV mode)"
+    RESERVED = "Reserved"
+    TOP_OFF_TIMER_ACTIVE = "Top-off Timer Active Charging"
+    CHARGE_TERMINATION_DONE = "Charge Termination Done"
+
+
+class BatteryStatus(Enum):
+    """Enumeration of possible battery status values."""
+
+    OK = "OK"
+    LOW = "LOW"
+    SHUTDOWN = "SHUTDOWN"
+
+
+@dataclass
+class ChargerData:
+    """Data class to hold charger status information from to_json function.
+
+    Attributes:
+        charger_status: Current charging status
+        vbat: Battery Voltage in mV
+        vbus: Bus Power (USB-C or from J2) in mV
+        ibat: Battery Current in mA, positive for charging, negative for discharging
+        ibus: Bus Current in mA
+        temp: Temperature of Charger IC
+        battery_connected: 0 = Battery not present, 1 = Battery present
+        bat_soc: Estimated State-of-Charge of Battery (based on VBat) and Battery
+            Config File
+        bat_stat: Battery Status from BatteryStatus enum - Indication for Front-End
+        bat_type: Battery Type as read from Battery Config File
+        input_current_limit: Input Current Limit obtained from ICO or ILIM_HIZ
+            pin setting
+    """
+
+    charger_status: ChargerStatus
+    vbat: int
+    vbus: int
+    ibat: int
+    ibus: int
+    temp: float
+    battery_connected: int
+    bat_soc: float
+    bat_stat: BatteryStatus
+    bat_type: str
+    input_current_limit: int
+
+
 class I2CError(Exception):
     """Custom exception for I2C communication errors."""
 
@@ -57,8 +113,9 @@ class bq25792:
     """
     A class for interfacing with the BQ25792 charger IC.
 
-    The BQ25792 is a highly integrated battery charge management IC that supports USB-C PD and other power sources.
-    This class provides methods to configure, monitor, and control the charger IC via I2C communication.
+    The BQ25792 is a highly integrated battery charge management IC that supports
+    USB-C PD and other power sources. This class provides methods to configure,
+    monitor, and control the charger IC via I2C communication.
 
     Attributes
     ----------
@@ -71,13 +128,15 @@ class bq25792:
     registers : list
         A list of register values read from the BQ25792 IC.
     battery_conf : dict
-        Configuration for the battery, including thresholds for state-of-charge (SOC) and warnings.
+        Configuration for the battery, including thresholds for state-of-charge (SOC)
+        and warnings.
     battery_conf_file : str
         Path to the JSON configuration file for the battery.
 
     Methods
     -------
-    __init__(i2c_device=1, i2c_addr=0x6b, busWS_ms=10, exit_on_error=False, battery_conf_file="/etc/mupibox/mupiboxconfig.json")
+    __init__(i2c_device=1, i2c_addr=0x6b, busWS_ms=10, exit_on_error=False,
+        battery_conf_file="/etc/mupibox/mupiboxconfig.json")
         Initializes the BQ25792 class and sets up default configurations.
     read_register(reg_addr, length=1)
         Reads data from a specific register.
@@ -112,11 +171,14 @@ class bq25792:
     MuPiHAT_Default()
         Writes default settings specific to the MuPiHAT project.
     to_json()
-        Returns a JSON object with key metrics such as voltage, current, temperature, and charger status.
+        Returns a JSON object with key metrics such as voltage, current, temperature,
+        and charger status.
     to_json_registers()
-        Returns a JSON object containing all register variables with their names and values.
+        Returns a JSON object containing all register variables with their names and
+        values.
     battery_soc()
-        Calculates the battery state-of-charge (SOC) based on the VBAT value and configuration thresholds.
+        Calculates the battery state-of-charge (SOC) based on the VBAT value and
+        configuration thresholds.
     soft_reset()
         Performs a soft reset of the charger IC.
     safe_execute(func, *args, **kwargs)
@@ -266,7 +328,8 @@ class bq25792:
         Description
         -------
         Calc the Battery State-of-Charge
-        Compares the voltage of battery (from VBat register value) with thresholds from battery_conf
+        Compares the voltage of battery (from VBat register value) with thresholds from
+            battery_conf
 
         Outputs
         ------
@@ -334,7 +397,8 @@ class bq25792:
         ----------
         VSYSMIN, Minimal System Voltage:
             During POR, the device reads the resistance tie to PROG pin,
-            to identify the default battery cell count and determine the default power on VSYSMIN list below:
+            to identify the default battery cell count and determine the default power
+            on VSYSMIN list below:
                 1s: 3.5V
                 2s: 7V
                 3s: 9V
@@ -357,7 +421,8 @@ class bq25792:
         ---------
         VREG, Battery Voltage Limit:
             During POR, the device reads the resistance tie to PROG pin,
-            to identify the default battery cell count and determine the default power-on battery voltage regulation limit:
+            to identify the default battery cell count and determine the default
+            power-on battery voltage regulation limit:
             1s: 4.2V
             2s: 8.4V
             3s: 12.6V
@@ -378,7 +443,10 @@ class bq25792:
             self.VRE0G = self._value * 10
 
     class REG03_Charge_Current_Limit(BQ25795_REGISTER):
-        # Charge Current Limit During POR, the device reads the resistance tie to PROG pin, to identify the default battery cell count and determine the default power-on battery charging current: 1s and 2s: 3s and 4s: 1A Type : RW Range : 50mA-5000mA Fixed Offset : 0mA Bit Step Size : 10mA
+        # Charge Current Limit During POR, the device reads the resistance tie to PROG
+        # pin, to identify the default battery cell count and determine the default
+        # power-on battery charging current: 1s and 2s: 3s and 4s: 1A Type : RW Range :
+        # 50mA-5000mA Fixed Offset : 0mA Bit Step Size : 10mA
         def __init__(self, value=0):
             self._addr = 0x3
             self._value = value
@@ -389,7 +457,11 @@ class bq25792:
             self.ICHG = self._value * 10
 
     class REG05_Input_Voltage_Limit(BQ25795_REGISTER):
-        # Absolute VINDPM Threshold VINDPM register is reset to 3600mV upon adapter unplugged and it is set to the value based on the VBUS measurement when the adapter plugs in. It is not reset by the REG_RST and the WATCHDOG Type : RW POR: 3600mV (24h) Range : 3600mV-22000mV Fixed Offset : 0mV Bit Step Size : 100mV
+        # Absolute VINDPM Threshold VINDPM register is reset to 3600mV upon adapter
+        # unplugged and it is set to the value based on the VBUS measurement when the
+        # adapter plugs in. It is not reset by the REG_RST and the WATCHDOG Type :
+        #   RW POR: 3600mV (24h) Range : 3600mV-22000mV Fixed Offset : 0mV
+        #   Bit Step Size : 100mV
         def __init__(self, value=0):
             self._addr = 0x5
             self._value = value
@@ -445,8 +517,12 @@ class bq25792:
             self.get()
 
     class REG08_Precharge_Control(BQ25795_REGISTER):
-        # VBAT_LOWV: Battery voltage thresholds for the transition from precharge to fast charge, which is defined as a ratio of battery regulation limit (VREG) Type : RW POR: 11b 0h = 15%*VREG 1h = 62.2%*VREG 2h = 66.7%*VREG 3h = 71.4%*VREG
-        # IPRECHG: Precharge current limit Type : RW POR: 120mA (3h) Range : 40mA-2000mA Fixed Offset : 0mA Bit Step Size : 40mA
+        # VBAT_LOWV: Battery voltage thresholds for the transition from precharge to
+        #   fast charge, which is defined as a ratio of battery regulation limit (VREG)
+        #   Type : RW POR: 11b 0h = 15%*VREG 1h = 62.2%*VREG 2h = 66.7%*VREG
+        #   3h = 71.4%*VREG
+        # IPRECHG: Precharge current limit Type : RW POR: 120mA (3h) Range : 40mA-2000mA
+        #   Fixed Offset : 0mA Bit Step Size : 40mA
         def __init__(self, value=0):
             self._addr = 0x8
             self._value = value
@@ -514,7 +590,8 @@ class bq25792:
         BQ25795 - REG0A_Recharge_Control
         ----------
         CELL:
-            At POR, the charger reads the PROG pin resistance to determine the battery cell count and update this CELL bits accordingly.
+            At POR, the charger reads the PROG pin resistance to determine the battery
+                cell count and update this CELL bits accordingly.
             Type : RW
             0h = 1s
             1h = 2s
@@ -615,8 +692,10 @@ class bq25792:
             Enable the 2X Timer
             Type : RW
             POR: 1b
-            0h =  Trickle charge, pre-charge and fast charge timer NOT slowed by 2X during input DPM or thermal regulation.
-            1h = Trickle charge, pre-charge and fast charge timer slowed by 2X during input DPM or thermal regulation (default)
+            0h =  Trickle charge, pre-charge and fast charge timer NOT slowed by 2X
+                during input DPM or thermal regulation.
+            1h = Trickle charge, pre-charge and fast charge timer slowed by 2X during
+                input DPM or thermal regulation (default)
         """
 
         def __init__(self, addr=0xE, value=0x3D):
@@ -708,13 +787,15 @@ class bq25792:
         EN_AUTO_IBATDIS
             Enable the auto battery discharging during the battery OVP fault
             Type : RW POR: 1b
-            0h = The charger will NOT apply a discharging current on BAT during battery OVP
+            0h = The charger will NOT apply a discharging current on BAT during
+                battery OVP
             1h = The charger will apply a discharging current on BAT during battery OVP
         FORCE_IBATDIS
             Force a battery discharging current
             Type : RW POR: 0b
             0h = IDLE (default)
-            1h = Force the charger to apply a discharging current on BAT regardless the battery OVP status
+            1h = Force the charger to apply a discharging current on BAT regardless the
+                battery OVP status
         EN_CHG
             Charger Enable Configuration
             Type : RW POR: 1b
@@ -726,12 +807,14 @@ class bq25792:
             0h = Disable ICO (default)
             1h = Enable ICO
         FORCE_ICO
-            Force start input current optimizer (ICO) Note: This bit can only be set and returns 0 after ICO starts. This bit only valid when EN_ICO = 1
+            Force start input current optimizer (ICO) Note: This bit can only be set and
+                returns 0 after ICO starts. This bit only valid when EN_ICO = 1
             Type : RW POR: 0b
             0h = Do NOT force ICO (Default)
             1h = Force ICO start
         EN_HIZ
-            Enable HIZ mode. This bit will be also reset to 0, when the adapter is plugged in at VBUS.
+            Enable HIZ mode. This bit will be also reset to 0, when the adapter is
+                plugged in at VBUS.
             Type : RW POR: 0b
             0h = Disable (default)
             1h = Enable
@@ -790,7 +873,9 @@ class bq25792:
 
         def set_EN_AUTO_IBATDIS(self, EN_AUTO_IBATDIS):
             """
-            Set EN_AUTO_IBATDIS (0h = The charger will NOT apply a discharging current on BAT during battery OVP, 1h = The charger will apply a discharging current on BAT during battery OVP)
+            Set EN_AUTO_IBATDIS (0h = The charger will NOT apply a discharging current
+                on BAT during battery OVP, 1h = The charger will apply a discharging
+                current on BAT during battery OVP)
             """
             self.EN_AUTO_IBATDIS = EN_AUTO_IBATDIS
             self.get()
@@ -801,7 +886,8 @@ class bq25792:
 
         def set_FORCE_IBATDIS(self, FORCE_IBATDIS):
             """
-            Set FORCE_IBATDIS (0h = IDLE (default), 1h = Force the charger to apply a discharging current on BAT regardless the battery OVP status)
+            Set FORCE_IBATDIS (0h = IDLE (default), 1h = Force the charger to apply a
+            discharging current on BAT regardless the battery OVP status)
             """
             self.FORCE_IBATDIS = FORCE_IBATDIS
             self.get()
@@ -923,7 +1009,8 @@ class bq25792:
 
         def set_WD_RST(self, WD_RST):
             """
-            Set WD_RST (0h = Normal (default), 1h = Reset (this bit goes back to 0 after timer resets))
+            Set WD_RST (0h = Normal (default), 1h = Reset (this bit goes back to 0 after
+                timer resets))
             """
             self.WD_RST = WD_RST
             self.get()
@@ -934,7 +1021,8 @@ class bq25792:
 
         def set_WATCHDOG(self, WATCHDOG):
             """
-            Set WATCHDOG (0h = Disable, 1h = 0.5s, 2h = 1s, 3h = 2s, 4h = 20s, 5h = 40s (default), 6h = 80s, 7h = 160s)
+            Set WATCHDOG (0h = Disable, 1h = 0.5s, 2h = 1s, 3h = 2s, 4h = 20s, 5h = 40s
+                (default), 6h = 80s, 7h = 160s)
             """
             self.WATCHDOG = WATCHDOG
             self.get()
@@ -947,7 +1035,8 @@ class bq25792:
             Force D+/D- detection
             Type : RW POR: 0b
             0h = Do NOT force D+/D- detection (default)
-            1h = Force D+/D- algorithm, when D+/D- detection is done, this bit will be reset to 0
+            1h = Force D+/D- algorithm, when D+/D- detection is done, this bit will be
+                reset to 0
         AUTO_INDET_EN
             Automatic D+/D- Detection Enable
             Type : RW POR: 1b
@@ -969,7 +1058,8 @@ class bq25792:
             0h = Disable HVDCP handshake (default)
             1h = Enable HVDCP handshake
         SDRV_CTRL
-            SFET control The external ship FET control logic to force the device enter different modes.
+            SFET control The external ship FET control logic to force the device enter
+                different modes.
             Type : RW POR: 00b
             0h = IDLE (default)
             1h = Shutdown Mode
@@ -1028,7 +1118,8 @@ class bq25792:
         BQ25795 - REG12_Charger_Control_3
         ----------
         DIS_ACDRV
-            When this bit is set, the charger will force both EN_ACDRV1=0 and EN_ACDRV2=0
+            When this bit is set, the charger will force both EN_ACDRV1=0 and
+                EN_ACDRV2=0
             Type : RW
             POR: 0b
         EN_OTG
@@ -1050,7 +1141,8 @@ class bq25792:
             0h = Enable (Default)
             1h = Disable
         WKUP_DLY
-            When wake up the device from ship mode, how much time (tSM_EXIT) is required to pull low the QON pin.
+            When wake up the device from ship mode, how much time (tSM_EXIT) is required
+                to pull low the QON pin.
             Type : RW
             POR: 0b
             0h = 1s (Default)
@@ -1210,17 +1302,20 @@ class bq25792:
         BQ25795 - REG13_Charger_Control_4
         ----------
         EN_ACDRV2
-            External ACFET2-RBFET2 gate driver control At POR, if the charger detects that there is no ACFET2-RBFET2 populated, this bit will be locked at 0
+            External ACFET2-RBFET2 gate driver control At POR, if the charger detects
+                that there is no ACFET2-RBFET2 populated, this bit will be locked at 0
             Type : RW POR: 0b
             0h = turn off (default)
             1h = turn on
         EN_ACDRV1
-            External ACFET1-RBFET1 gate driver control At POR, if the charger detects that there is no ACFET1-RBFET1 populated, this bit will be locked at 0
+            External ACFET1-RBFET1 gate driver control At POR, if the charger detects
+                that there is no ACFET1-RBFET1 populated, this bit will be locked at 0
             Type : RW POR: 0b
             0h = turn off (default)
             1h = turn on
         PWM_FREQ
-            Switching frequency selection, this bit POR default value is based on the PROG pin strapping.
+            Switching frequency selection, this bit POR default value is based on the
+                PROG pin strapping.
             Type : RW
             0h = 1.5 MHz
             1h = 750 kHz
@@ -1240,10 +1335,14 @@ class bq25792:
             0h = Enable (Default)
             1h = Disable
         FORCE_VINDPM_DET
-            Force VINDPM detection Note: only when VBAT>VSYSMIN, this bit can be set to 1. Once the VINDPM auto detection is done, this bits returns to 0.
+            Force VINDPM detection Note: only when VBAT>VSYSMIN, this bit can be
+                set to 1. Once the VINDPM auto detection is done,
+                this bits returns to 0.
             Type : RW POR: 0b
             0h = Do NOT force VINDPM detection (default)
-            1h = Force the converter stop switching, and ADC measures the VBUS voltage without input current, then the charger updates the VINDPM register accordingly.
+            1h = Force the converter stop switching, and ADC measures the VBUS voltage
+                without input current, then the charger updates the VINDPM register
+                accordingly.
         EN_IBUS_OCP
             Enable IBUS_OCP in forward mode
             Type : RW POR: 1b
@@ -1301,11 +1400,14 @@ class bq25792:
         BQ25795 - REG14_Charger_Control_5
         ----------
         SFET_PRESENT
-            The user has to set this bit based on whether a ship FET is populated or not.
-            The POR default value is 0, which means the charger does not support all the features associated with the ship FET.
+            The user has to set this bit based on whether a ship FET is populated
+                or not.
+            The POR default value is 0, which means the charger does not support all the
+                features associated with the ship FET.
             The register bits list below all are locked at 0.
             EN_BATOC=0 FORCE_SFET_OFF=0 SDRV_CTRL=00
-            When this bit is set to 1, the register bits list above become programmable, and the charger can support the features associated with the ship FET
+            When this bit is set to 1, the register bits list above become programmable,
+                and the charger can support the features associated with the ship FET
             Type : RW POR: 0b
             0h = No ship FET populated
             1h = Ship FET populated
@@ -1393,7 +1495,8 @@ class bq25792:
 
         def set_EN_IBAT(self, EN_IBAT):
             """
-            Set EN_IBAT (0h = Disable IBAT discharge current sensing for ADC (default), 1h = Enable the IBAT discharge current sensing for ADC)
+            Set EN_IBAT (0h = Disable IBAT discharge current sensing for ADC (default),
+                1h = Enable the IBAT discharge current sensing for ADC)
             """
             self.EN_IBAT = EN_IBAT
             self.get()
@@ -1699,7 +1802,10 @@ class bq25792:
 
         def set_JEITA_VSET(self, JEITA_VSET):
             """
-            Set JEITA_VSET (0h = Charge Suspend, 1h = Set VREG to VREG-800mV, 2h = Set VREG to VREG-600mV, 3h = Set VREG to VREG-400mV (default), 4h = Set VREG to VREG-300mV, 5h = Set VREG to VREG-200mV, 6h = Set VREG to VREG-100mV, 7h = VREG unchanged)
+            Set JEITA_VSET (0h = Charge Suspend, 1h = Set VREG to VREG-800mV,
+            2h = Set VREG to VREG-600mV, 3h = Set VREG to VREG-400mV (default),
+            4h = Set VREG to VREG-300mV, 5h = Set VREG to VREG-200mV,
+            6h = Set VREG to VREG-100mV, 7h = VREG unchanged)
             """
             self.JEITA_VSET = JEITA_VSET
             self.get()
@@ -1722,7 +1828,8 @@ class bq25792:
 
         def set_JEITA_ISETH(self, JEITA_ISETH):
             """
-            Set JEITA_ISETH (0h = Charge Suspend, 1h = Set ICHG to 20%* ICHG, 2h = Set ICHG to 40%* ICHG, 3h = ICHG unchanged (default))
+            Set JEITA_ISETH (0h = Charge Suspend, 1h = Set ICHG to 20%* ICHG,
+            2h = Set ICHG to 40%* ICHG, 3h = ICHG unchanged (default))
             """
             self.JEITA_ISETH = JEITA_ISETH
             self.get()
@@ -1745,7 +1852,8 @@ class bq25792:
 
         def set_JEITA_ISETC(self, JEITA_ISETC):
             """
-            Set JEITA_ISETC (0h = Charge Suspend, 1h = Set ICHG to 20%* ICHG (default), 2h = Set ICHG to 40%* ICHG, 3h = ICHG unchanged)
+            Set JEITA_ISETC (0h = Charge Suspend, 1h = Set ICHG to 20%* ICHG (default),
+            2h = Set ICHG to 40%* ICHG, 3h = ICHG unchanged)
             """
             self.JEITA_ISETC = JEITA_ISETC
             self.get()
@@ -1756,7 +1864,8 @@ class bq25792:
         ----------
         TS_COOL
             JEITA VT2 comparator voltage rising thresholds as a percentage of REGN.
-            The corresponding temperature in the brackets is achieved when a 103AT NTC thermistor is used, RT1=5.24kΩ and RT2=30.31kΩ.
+            The corresponding temperature in the brackets is achieved when a 103AT NTC
+            thermistor is used, RT1=5.24kΩ and RT2=30.31kΩ.
             Type : RW
             POR: 01b
             0h = 71.1% (5°C)
@@ -1765,7 +1874,8 @@ class bq25792:
             3h = 62.4% (20°C)
         TS_WARM
             JEITA VT3 comparator voltage falling thresholds as a percentage of REGN.
-            The corresponding temperature in the brackets is achieved when a 103AT NTC thermistor is used, RT1=5.24kΩ and RT2=30.31kΩ.
+            The corresponding temperature in the brackets is achieved when a 103AT NTC
+            thermistor is used, RT1=5.24kΩ and RT2=30.31kΩ.
             Type : RW
             POR: 01b
             0h = 48.4% (40°C)
@@ -1787,7 +1897,9 @@ class bq25792:
             0h = -10°C (default)
             1h = -20°C
         TS_IGNORE
-            Ignore the TS feedback, the charger considers the TS is always good to allow the charging and OTG modes, all the four TS status bits always stay at 0000 to report the normal condition.
+            Ignore the TS feedback, the charger considers the TS is always good to allow
+                the charging and OTG modes, all the four TS status bits always stay
+                at 0000 to report the normal condition.
             Type : RW
             POR: 0b
             0h = NOT ignore (Default)
@@ -1833,7 +1945,8 @@ class bq25792:
 
         def set_TS_COOL(self, TS_COOL):
             """
-            Set TS_COOL (0h = 71.1% (5°C), 1h = 68.4% (default) (10°C), 2h = 65.5% (15°C), 3h = 62.4% (20°C))
+            Set TS_COOL (0h = 71.1% (5°C), 1h = 68.4% (default) (10°C),
+            2h = 65.5% (15°C), 3h = 62.4% (20°C))
             """
             self.TS_COOL = TS_COOL
             self.get()
@@ -1844,7 +1957,8 @@ class bq25792:
 
         def set_TS_WARM(self, TS_WARM):
             """
-            Set TS_WARM (0h = 48.4% (40°C), 1h = 44.8% (default) (45°C), 2h = 41.2% (50°C), 3h = 37.7% (55°C))
+            Set TS_WARM (0h = 48.4% (40°C), 1h = 44.8% (default) (45°C),
+            2h = 41.2% (50°C), 3h = 37.7% (55°C))
             """
             self.TS_WARM = TS_WARM
             self.get()
@@ -1959,7 +2073,8 @@ class bq25792:
             return self._value, self.ICO_ILIM
 
         def get_ICO_ILIM(self):
-            """return Input Current Limit obtained from ICO or ILIM_HIZ pin setting in [mA]"""
+            """return Input Current Limit obtained from ICO or ILIM_HIZ pin setting
+            in [mA]"""
             return self.ICO_ILIM * 10
 
     class REG1B_Charger_Status_0(BQ25795_REGISTER):
@@ -2158,24 +2273,17 @@ class bq25792:
             6h = Top-off Timer Active Charging
             7h = Charge Termination Done
             """
-            if CHG_STAT == 0x0:
-                return "Not Charging"
-            elif CHG_STAT == 0x1:
-                return "Trickle Charge"
-            elif CHG_STAT == 0x2:
-                return "Pre-charge"
-            elif CHG_STAT == 0x3:
-                return "Fast charge (CC mode)"
-            elif CHG_STAT == 0x4:
-                return "Taper Charge (CV mode)"
-            elif CHG_STAT == 0x5:
-                return "Reserved"
-            elif CHG_STAT == 0x6:
-                return "Top-off Timer Active Charging"
-            elif CHG_STAT == 0x7:
-                return "Charge Termination Done"
-            else:
-                return "Reserved"
+            chg_stat_dict = {
+                0x0: "Not Charging",
+                0x1: "Trickle Charge",
+                0x2: "Pre-charge",
+                0x3: "Fast charge (CC mode)",
+                0x4: "Taper Charge (CV mode)",
+                0x5: "Reserved",
+                0x6: "Top-off Timer Active Charging",
+                0x7: "Charge Termination Done",
+            }
+            return chg_stat_dict.get(CHG_STAT, "Reserved")
 
         def get_CHG_STAT(self):
             """return CHG_STAT"""
@@ -3026,7 +3134,8 @@ class bq25792:
             Type : R
             POR: 0b
             0h = Normal
-            1h = Any change in PG_STAT even (adapter good qualification or adapter good going away)
+            1h = Any change in PG_STAT even (adapter good qualification or adapter good
+                going away)
         VAC2_PRESENT_FLAG
             VAC2 present flag
             Type : R
@@ -3186,12 +3295,16 @@ class bq25792:
             """
             Returns PG_FLAG string
             0h = Normal
-            1h = Any change in PG_STAT even (adapter good qualification or adapter good going away)
+            1h = Any change in PG_STAT even (adapter good qualification or adapter good
+                going away)
             """
             if self.PG_FLAG == 0:
                 return "Normal"
             elif self.PG_FLAG == 1:
-                return "Any change in PG_STAT even (adapter good qualification or adapter good going away)"
+                return (
+                    "Any change in PG_STAT even (adapter good qualification or "
+                    "adapter good going away)"
+                )
             else:
                 return "unknown"
 
@@ -4283,7 +4396,8 @@ class bq25792:
 
         def get(self):
             """
-            return IINDPM_MASK, VINDPM_MASK, WD_MASK, POORSRC_MASK, PG_MASK, VAC2_PRESENT_MASK, VAC1_PRESENT_MASK, VBUS_PRESENT_MASK
+            return IINDPM_MASK, VINDPM_MASK, WD_MASK, POORSRC_MASK, PG_MASK,
+                VAC2_PRESENT_MASK, VAC1_PRESENT_MASK, VBUS_PRESENT_MASK
             """
             self._value = (
                 (self.IINDPM_MASK << 7)
@@ -4445,56 +4559,64 @@ class bq25792:
 
         def set_VBUS_PRESENT_MASK(self, VBUS_PRESENT_MASK):
             """
-            Set VBUS_PRESENT_MASK (0h = VBUS present status change does produce INT, 1h = VBUS present status change does NOT produce INT)
+            Set VBUS_PRESENT_MASK (0h = VBUS present status change does produce INT,
+                1h = VBUS present status change does NOT produce INT)
             """
             self.VBUS_PRESENT_MASK = VBUS_PRESENT_MASK
             self.get()
 
         def set_VAC1_PRESENT_MASK(self, VAC1_PRESENT_MASK):
             """
-            Set VAC1_PRESENT_MASK (0h = VAC1 present status change does produce INT, 1h = VAC1 present status change does NOT produce INT)
+            Set VAC1_PRESENT_MASK (0h = VAC1 present status change does produce INT,
+                1h = VAC1 present status change does NOT produce INT)
             """
             self.VAC1_PRESENT_MASK = VAC1_PRESENT_MASK
             self.get()
 
         def set_VAC2_PRESENT_MASK(self, VAC2_PRESENT_MASK):
             """
-            Set VAC2_PRESENT_MASK (0h = VAC2 present status change does produce INT, 1h = VAC2 present status change does NOT produce INT)
+            Set VAC2_PRESENT_MASK (0h = VAC2 present status change does produce INT,
+                1h = VAC2 present status change does NOT produce INT)
             """
             self.VAC2_PRESENT_MASK = VAC2_PRESENT_MASK
             self.get()
 
         def set_PG_MASK(self, PG_MASK):
             """
-            Set PG_MASK (0h = PG toggle does produce INT, 1h = PG toggle does NOT produce INT)
+            Set PG_MASK (0h = PG toggle does produce INT, 1h = PG toggle does NOT
+                produce INT)
             """
             self.PG_MASK = PG_MASK
             self.get()
 
         def set_POORSRC_MASK(self, POORSRC_MASK):
             """
-            Set POORSRC_MASK (0h = Poor source detected does produce INT, 1h = Poor source detected does NOT produce INT)
+            Set POORSRC_MASK (0h = Poor source detected does produce INT, 1h = Poor
+                source detected does NOT produce INT)
             """
             self.POORSRC_MASK = POORSRC_MASK
             self.get()
 
         def set_WD_MASK(self, WD_MASK):
             """
-            Set WD_MASK (0h = I2C watch dog timer expired does produce INT pulse, 1h = I2C watch dog timer expired does NOT produce INT pulse)
+            Set WD_MASK (0h = I2C watch dog timer expired does produce INT pulse,
+                1h = I2C watch dog timer expired does NOT produce INT pulse)
             """
             self.WD_MASK = WD_MASK
             self.get()
 
         def set_VINDPM_MASK(self, VINDPM_MASK):
             """
-            Set VINDPM_MASK (0h = Enter VINDPM / VOTG does produce INT pulse, 1h = Enter VINDPM / VOTG does NOT produce INT pulse)
+            Set VINDPM_MASK (0h = Enter VINDPM / VOTG does produce INT pulse,
+                1h = Enter VINDPM / VOTG does NOT produce INT pulse)
             """
             self.VINDPM_MASK = VINDPM_MASK
             self.get()
 
         def set_IINDPM_MASK(self, IINDPM_MASK):
             """
-            Set IINDPM_MASK (0h = Enter IINDPM / IOTG does produce INT pulse, 1h = Enter IINDPM / IOTG does NOT produce INT pulse)
+            Set IINDPM_MASK (0h = Enter IINDPM / IOTG does produce INT pulse,
+                1h = Enter IINDPM / IOTG does NOT produce INT pulse)
             """
             self.IINDPM_MASK = IINDPM_MASK
             self.get()
@@ -4697,42 +4819,48 @@ class bq25792:
 
         def set_CHG_MASK(self, CHG_MASK):
             """
-            Set CHG_MASK (0h = Charging status change does produce INT, 1h = Charging status change does NOT produce INT)
+            Set CHG_MASK (0h = Charging status change does produce INT, 1h = Charging
+                status change does NOT produce INT)
             """
             self.CHG_MASK = CHG_MASK
             self.get()
 
         def set_ICO_MASK(self, ICO_MASK):
             """
-            Set ICO_MASK (0h = ICO status change does produce INT, 1h = ICO status change does NOT produce INT)
+            Set ICO_MASK (0h = ICO status change does produce INT, 1h = ICO status
+                change does NOT produce INT)
             """
             self.ICO_MASK = ICO_MASK
             self.get()
 
         def set_VBUS_MASK(self, VBUS_MASK):
             """
-            Set VBUS_MASK (0h = VBUS status change does produce INT, 1h = VBUS status change does NOT produce INT)
+            Set VBUS_MASK (0h = VBUS status change does produce INT, 1h = VBUS status
+                change does NOT produce INT)
             """
             self.VBUS_MASK = VBUS_MASK
             self.get()
 
         def set_TREG_MASK(self, TREG_MASK):
             """
-            Set TREG_MASK (0h = TREG status change does produce INT, 1h = TREG status change does NOT produce INT)
+            Set TREG_MASK (0h = TREG status change does produce INT, 1h = TREG status
+                change does NOT produce INT)
             """
             self.TREG_MASK = TREG_MASK
             self.get()
 
         def set_VBAT_PRESENT_MASK(self, VBAT_PRESENT_MASK):
             """
-            Set VBAT_PRESENT_MASK (0h = VBAT present status change does produce INT, 1h = VBAT present status change does NOT produce INT)
+            Set VBAT_PRESENT_MASK (0h = VBAT present status change does produce INT,
+                1h = VBAT present status change does NOT produce INT)
             """
             self.VBAT_PRESENT_MASK = VBAT_PRESENT_MASK
             self.get()
 
         def set_BC1_2_DONE_MASK(self, BC1_2_DONE_MASK):
             """
-            Set BC1_2_DONE_MASK (0h = BC1.2 done status change does produce INT, 1h = BC1.2 done status change does NOT produce INT)
+            Set BC1_2_DONE_MASK (0h = BC1.2 done status change does produce INT,
+                1h = BC1.2 done status change does NOT produce INT)
             """
             self.BC1_2_DONE_MASK = BC1_2_DONE_MASK
             self.get()
@@ -4819,7 +4947,8 @@ class bq25792:
 
         def get(self):
             """
-            return DPDM_DONE_MASK, ADC_DONE_MASK, VSYS_MASK, CHG_TMR_MASK, TRICHG_TMR_MASK, PRECHG_TMR_MASK, TOPOFF_TMR_MASK
+            return DPDM_DONE_MASK, ADC_DONE_MASK, VSYS_MASK, CHG_TMR_MASK,
+                TRICHG_TMR_MASK, PRECHG_TMR_MASK, TOPOFF_TMR_MASK
             """
             self._value = (
                 0
@@ -4963,49 +5092,56 @@ class bq25792:
 
         def set_DPDM_DONE_MASK(self, DPDM_DONE_MASK):
             """
-            Set DPDM_DONE_MASK (0h = D+/D- detection done does produce INT pulse, 1h = D+/D- detection done does NOT produce INT pulse)
+            Set DPDM_DONE_MASK (0h = D+/D- detection done does produce INT pulse,
+                1h = D+/D- detection done does NOT produce INT pulse)
             """
             self.DPDM_DONE_MASK = DPDM_DONE_MASK
             self.get()
 
         def set_ADC_DONE_MASK(self, ADC_DONE_MASK):
             """
-            Set ADC_DONE_MASK (0h = ADC conversion done does produce INT pulse, 1h = ADC conversion done does NOT produce INT pulse)
+            Set ADC_DONE_MASK (0h = ADC conversion done does produce INT pulse,
+                1h = ADC conversion done does NOT produce INT pulse)
             """
             self.ADC_DONE_MASK = ADC_DONE_MASK
             self.get()
 
         def set_VSYS_MASK(self, VSYS_MASK):
             """
-            Set VSYS_MASK (0h = enter or exit VSYSMIN regulation does produce INT pulse, 1h = enter or exit VSYSMIN regulation does NOT produce INT pulse)
+            Set VSYS_MASK (0h = enter or exit VSYSMIN regulation does produce INT pulse,
+                1h = enter or exit VSYSMIN regulation does NOT produce INT pulse)
             """
             self.VSYS_MASK = VSYS_MASK
             self.get()
 
         def set_CHG_TMR_MASK(self, CHG_TMR_MASK):
             """
-            Set CHG_TMR_MASK (0h = Fast charge timer expire does produce INT, 1h = Fast charge timer expire does NOT produce INT)
+            Set CHG_TMR_MASK (0h = Fast charge timer expire does produce INT, 1h = Fast
+                charge timer expire does NOT produce INT)
             """
             self.CHG_TMR_MASK = CHG_TMR_MASK
             self.get()
 
         def set_TRICHG_TMR_MASK(self, TRICHG_TMR_MASK):
             """
-            Set TRICHG_TMR_MASK (0h = Trickle charge timer expire does produce INT, 1h = Trickle charge timer expire does NOT produce INT)
+            Set TRICHG_TMR_MASK (0h = Trickle charge timer expire does produce INT,
+                1h = Trickle charge timer expire does NOT produce INT)
             """
             self.TRICHG_TMR_MASK = TRICHG_TMR_MASK
             self.get()
 
         def set_PRECHG_TMR_MASK(self, PRECHG_TMR_MASK):
             """
-            Set PRECHG_TMR_MASK (0h = Precharge timer expire does produce INT, 1h = Precharge timer expire does NOT produce INT)
+            Set PRECHG_TMR_MASK (0h = Precharge timer expire does produce INT,
+                1h = Precharge timer expire does NOT produce INT)
             """
             self.PRECHG_TMR_MASK = PRECHG_TMR_MASK
             self.get()
 
         def set_TOPOFF_TMR_MASK(self, TOPOFF_TMR_MASK):
             """
-            Set TOPOFF_TMR_MASK (0h = Top off timer expire does produce INT, 1h = Top off timer expire does NOT produce INT)
+            Set TOPOFF_TMR_MASK (0h = Top off timer expire does produce INT,
+                1h = Top off timer expire does NOT produce INT)
             """
             self.TOPOFF_TMR_MASK = TOPOFF_TMR_MASK
             self.get()
@@ -5018,8 +5154,10 @@ class bq25792:
             VBAT too low to enable OTG mask
             Type : RW
             POR: 0b
-            0h = VBAT falling below the threshold to enable the OTG mode, does produce INT
-            1h = VBAT falling below the threshold to enable the OTG mode, does NOT produce INT
+            0h = VBAT falling below the threshold to enable the OTG mode,
+                does produce INT
+            1h = VBAT falling below the threshold to enable the OTG mode,
+                does NOT produce INT
         TS_COLD_MASK
             TS cold temperature interrupt mask
             Type : RW
@@ -5074,7 +5212,8 @@ class bq25792:
 
         def get(self):
             """
-            return VBATOTG_LOW_MASK, TS_COLD_MASK, TS_COOL_MASK, TS_WARM_MASK, TS_HOT_MASK
+            return VBATOTG_LOW_MASK, TS_COLD_MASK, TS_COOL_MASK, TS_WARM_MASK,
+                TS_HOT_MASK
             """
             self._value = (
                 0
@@ -5116,13 +5255,21 @@ class bq25792:
         def get_VBATOTG_LOW_MASK_string(self):
             """
             Returns VBATOTG_LOW_MASK string
-            0h = VBAT falling below the threshold to enable the OTG mode, does produce INT
-            1h = VBAT falling below the threshold to enable the OTG mode, does NOT produce INT
+            0h = VBAT falling below the threshold to enable the OTG mode,
+                does produce INT
+            1h = VBAT falling below the threshold to enable the OTG mode,
+                does NOT produce INT
             """
             if self.VBATOTG_LOW_MASK == 0:
-                return "VBAT falling below the threshold to enable the OTG mode, does produce INT"
+                return (
+                    "VBAT falling below the threshold to enable the OTG mode,"
+                    " does produce INT"
+                )
             elif self.VBATOTG_LOW_MASK == 1:
-                return "VBAT falling below the threshold to enable the OTG mode, does NOT produce INT"
+                return (
+                    "VBAT falling below the threshold to enable the OTG mode,"
+                    " does NOT produce INT"
+                )
             else:
                 return "unknown"
 
@@ -5180,35 +5327,41 @@ class bq25792:
 
         def set_VBATOTG_LOW_MASK(self, VBATOTG_LOW_MASK):
             """
-            Set VBATOTG_LOW_MASK (0h = VBAT falling below the threshold to enable the OTG mode, does produce INT, 1h = VBAT falling below the threshold to enable the OTG mode, does NOT produce INT)
+            Set VBATOTG_LOW_MASK (0h = VBAT falling below the threshold to enable
+                the OTG mode, does produce INT, 1h = VBAT falling below the threshold
+                to enable the OTG mode, does NOT produce INT)
             """
             self.VBATOTG_LOW_MASK = VBATOTG_LOW_MASK
             self.get()
 
         def set_TS_COLD_MASK(self, TS_COLD_MASK):
             """
-            Set TS_COLD_MASK (0h = TS across cold temperature (T1) does produce INT, 1h = TS across cold temperature (T1) does NOT produce INT)
+            Set TS_COLD_MASK (0h = TS across cold temperature (T1) does produce INT,
+                1h = TS across cold temperature (T1) does NOT produce INT)
             """
             self.TS_COLD_MASK = TS_COLD_MASK
             self.get()
 
         def set_TS_COOL_MASK(self, TS_COOL_MASK):
             """
-            Set TS_COOL_MASK (0h = TS across cool temperature (T2) does produce INT, 1h = TS across cool temperature (T2) does NOT produce INT)
+            Set TS_COOL_MASK (0h = TS across cool temperature (T2) does produce INT,
+                1h = TS across cool temperature (T2) does NOT produce INT)
             """
             self.TS_COOL_MASK = TS_COOL_MASK
             self.get()
 
         def set_TS_WARM_MASK(self, TS_WARM_MASK):
             """
-            Set TS_WARM_MASK (0h = TS across warm temperature (T3) does produce INT, 1h = TS across warm temperature (T3) does NOT produce INT)
+            Set TS_WARM_MASK (0h = TS across warm temperature (T3) does produce INT,
+                1h = TS across warm temperature (T3) does NOT produce INT)
             """
             self.TS_WARM_MASK = TS_WARM_MASK
             self.get()
 
         def set_TS_HOT_MASK(self, TS_HOT_MASK):
             """
-            Set TS_HOT_MASK (0h = TS across hot temperature (T5) does produce INT, 1h = TS across hot temperature (T5) does NOT produce INT)
+            Set TS_HOT_MASK (0h = TS across hot temperature (T5) does produce INT,
+                1h = TS across hot temperature (T5) does NOT produce INT)
             """
             self.TS_HOT_MASK = TS_HOT_MASK
             self.get()
@@ -5307,7 +5460,8 @@ class bq25792:
 
         def get(self):
             """
-            return IBAT_REG_MASK, VBUS_OVP_MASK, VBAT_OVP_MASK, IBUS_OCP_MASK, IBAT_OCP_MASK, CONV_OCP_MASK, VAC2_OVP_MASK, VAC1_OVP_MASK
+            return IBAT_REG_MASK, VBUS_OVP_MASK, VBAT_OVP_MASK, IBUS_OCP_MASK,
+                IBAT_OCP_MASK, CONV_OCP_MASK, VAC2_OVP_MASK, VAC1_OVP_MASK
             """
             self._value = (
                 0
@@ -5527,7 +5681,8 @@ class bq25792:
 
         def get(self):
             """
-            return VSYS_SHORT_MASK, VSYS_OVP_MASK, OTG_OVP_MASK, OTG_UVP_MASK, TSHUT_MASK
+            return VSYS_SHORT_MASK, VSYS_OVP_MASK, OTG_OVP_MASK, OTG_UVP_MASK,
+                TSHUT_MASK
             """
             self._value = (
                 0
@@ -5726,7 +5881,9 @@ class bq25792:
 
         def set_ADC_SAMPLE(self, ADC_SAMPLE):
             """
-            Set ADC_SAMPLE (0h = 15 bit effective resolution, 1h = 14 bit effective resolution, 2h = 13 bit effective resolution, 3h = 12 bit effective resolution (default - not recommended))
+            Set ADC_SAMPLE (0h = 15 bit effective resolution, 1h = 14 bit effective
+                resolution, 2h = 13 bit effective resolution, 3h = 12 bit effective
+                resolution (default - not recommended))
             """
             self.ADC_SAMPLE = ADC_SAMPLE
             self.get()
@@ -5748,7 +5905,8 @@ class bq25792:
 
         def set_ADC_AVG_INIT(self, ADC_AVG_INIT):
             """
-            Set ADC_AVG_INIT (0h = Start average using the existing register value, 1h = Start average using a new ADC conversion)
+            Set ADC_AVG_INIT (0h = Start average using the existing register value,
+                1h = Start average using a new ADC conversion)
             """
             self.ADC_AVG_INIT = ADC_AVG_INIT
             self.get()
@@ -5831,7 +5989,8 @@ class bq25792:
 
         def get(self):
             """
-            return IBUS_ADC_DIS, IBAT_ADC_DIS, VBUS_ADC_DIS, VBAT_ADC_DIS, VSYS_ADC_DIS, TS_ADC_DIS, TDIE_ADC_DIS
+            return IBUS_ADC_DIS, IBAT_ADC_DIS, VBUS_ADC_DIS, VBAT_ADC_DIS, VSYS_ADC_DIS,
+                TS_ADC_DIS, TDIE_ADC_DIS
             """
             self._value = (
                 0
@@ -6193,7 +6352,9 @@ class bq25792:
         ----------
             IBUS_ADC
                 IBUS ADC reading Reported in 2 's Complement.
-                When the current is flowing from VBUS to PMID, IBUS ADC reports positive value, and when the current is flowing from PMID to VBUS, IBUS ADC reports negative value.
+                When the current is flowing from VBUS to PMID, IBUS ADC reports positive
+                    value, and when the current is flowing from PMID to VBUS, IBUS ADC
+                    reports negative value.
                 Type : R POR: 0mA (0h)
                 Range : 0mA-5000mA
                 Fixed Offset : 0mA
@@ -6226,7 +6387,9 @@ class bq25792:
         ----------
             IBAT_ADC
                 IBAT ADC reading Reported in 2 's Complement.
-                The IBAT ADC reports positive value for the battery charging current, and negative value for the battery discharging current if EN_IBAT in REG0x14[5] = 1.
+                The IBAT ADC reports positive value for the battery charging current,
+                    and negative value for the battery discharging current if EN_IBAT
+                    in REG0x14[5] = 1.
                 Type : R POR: 0mA (0h)
                 Range : 0mA-8000mA
                 Fixed Offset : 0mA
@@ -6989,7 +7152,9 @@ class bq25792:
     def mask_all_INTERRUPTS(self):
         """
         Masks all interrupts by setting the mask registers to 0xFF.
-        This is done by writing to the REG28_Charger_Mask_0, REG29_Charger_Mask_1, REG2A_Charger_Mask_2, REG2B_Charger_Mask_3, REG2C_FAULT_Mask_0, and REG2D_FAULT_Mask_1 registers.
+        This is done by writing to the REG28_Charger_Mask_0, REG29_Charger_Mask_1,
+            REG2A_Charger_Mask_2, REG2B_Charger_Mask_3, REG2C_FAULT_Mask_0,
+            and REG2D_FAULT_Mask_1 registers.
         """
         try:
             self.REG28_Charger_Mask_0.set(0xFF)
@@ -7081,7 +7246,8 @@ class bq25792:
         The value is written to the REG06_Input_Current_Limit register.
 
         Parameters:
-            input_current_limit (int): Desired input current limit in mA (10mA steps, range: 100mA-3300mA).
+            input_current_limit (int): Desired input current limit in mA (10mA steps,
+                range: 100mA-3300mA).
 
         Raises:
             ValueError: If the input current limit is out of the valid range.
@@ -7118,7 +7284,8 @@ class bq25792:
 
     def get_ibat(self) -> int:
         """
-        Get the IBAT current in mA, reports positive value for the battery charging current, and negative value for the battery discharging current
+        Get the IBAT current in mA, reports positive value for the battery charging
+            current, and negative value for the battery discharging current
         """
         return self.REG33_IBAT_ADC.IBAT_ADC
 
@@ -7208,7 +7375,8 @@ class bq25792:
         'Vbat'
             Battery Voltage in mV
         'Ibat'
-            Battery Current in mA, reports positive value for the battery charging current, and negative value for the battery discharging current
+            Battery Current in mA, reports positive value for the battery charging
+                current, and negative value for the battery discharging current
         'IBus'
             Bus Current in mA
         'Temp'
